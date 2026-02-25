@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 TIMEOUT = 3
 MAX_WORKERS = 80
 
-SUB_URL = "PUT_YOUR_SUB_LINK_HERE"
+SUB_URL = "https://raw.githubusercontent.com/punez/Repo-5/refs/heads/main/final.txt"
 
 
 def download_sub():
