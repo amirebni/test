@@ -18,13 +18,20 @@ jobs:
         with:
           python-version: "3.11"
 
-      - run: python sub_tester.py
-
-      - name: Commit result
+      # اول سینک با ریموت
+      - name: Sync with remote
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git pull --rebase origin main
+
+      # بعد اجرای اسکریپت
+      - name: Run script
+        run: python sub_tester.py
+
+      # بعد commit و push
+      - name: Commit result
+        run: |
           git add alive_sub.txt
           git commit -m "update alive sub" || echo "no changes"
           git push origin main
