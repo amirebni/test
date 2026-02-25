@@ -10,23 +10,31 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 TIMEOUT = 3
 MAX_WORKERS = 80
 
+# 🔻 لینک ساب خام خودت رو اینجا بذار
 SUB_URL = "https://raw.githubusercontent.com/punez/Repo-5/refs/heads/main/final.txt"
 
 
+# دانلود ساب
 def download_sub():
     with urllib.request.urlopen(SUB_URL, timeout=15) as response:
         data = response.read().decode("utf-8", errors="ignore")
     return data
 
 
+# ---------------- Parsers ---------------- #
+
 def parse_vmess(line):
     try:
-        raw = base64.b64decode(line[8:] + "==").decode()
-        j = json.loads(raw)
-        host = j["add"]
-        port = int(j["port"])
+        raw = line.replace("vmess://", "")
+        padded = raw + "=" * (-len(raw) % 4)
+        decoded = base64.b64decode(padded).decode("utf-8", errors="ignore")
+        j = json.loads(decoded)
+
+        host = j.get("add")
+        port = int(j.get("port"))
         tls = j.get("tls") == "tls"
         sni = j.get("sni") or host
+
         return host, port, tls, sni
     except:
         return None
@@ -52,15 +60,24 @@ def parse_vless_trojan(line):
 
 def parse_ss(line):
     try:
-        if "@“ in line:
-            base = line[5:]
-        else:
-            base = line[5:]
+        content = line.replace("ss://", "")
 
-        decoded = base64.b64decode(base + "==").decode()
+        if "#" in content:
+            content = content.split("#")[0]
+
+        # مدل جدید: base64@host:port
+        if "@" in content:
+            method_pass, server = content.split("@", 1)
+            host, port = server.split(":")
+            return host, int(port), False, host
+
+        # مدل قدیمی: کلش base64
+        padded = content + "=" * (-len(content) % 4)
+        decoded = base64.b64decode(padded).decode("utf-8", errors="ignore")
         method_pass, server = decoded.split("@")
         host, port = server.split(":")
         return host, int(port), False, host
+
     except:
         return None
 
@@ -77,6 +94,8 @@ def parse_line(line):
 
     return None
 
+
+# ---------------- Tests ---------------- #
 
 def tcp_check(host, port):
     start = time.time()
@@ -117,16 +136,20 @@ def tls_check(host, port, sni):
 def test_node(node):
     host, port, tls, sni = node
 
-    for _ in range(2):
+    for _ in range(2):  # یک retry
         if not tcp_check(host, port):
             continue
+
         if tls:
             if not tls_check(host, port, sni):
                 continue
+
         return True
 
     return False
 
+
+# ---------------- Main ---------------- #
 
 def main():
     raw = download_sub()
@@ -135,7 +158,7 @@ def main():
     parsed = {}
     for line in lines:
         p = parse_line(line)
-        if p:
+        if p and p[0] and p[1]:
             parsed[f"{p[0]}:{p[1]}"] = (p, line)
 
     alive_keys = set()
@@ -147,8 +170,12 @@ def main():
         }
 
         for future in as_completed(futures):
-            if future.result():
-                alive_keys.add(futures[future])
+            key = futures[future]
+            try:
+                if future.result():
+                    alive_keys.add(key)
+            except:
+                pass
 
     alive_lines = [parsed[k][1] for k in alive_keys]
 
