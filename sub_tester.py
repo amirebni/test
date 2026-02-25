@@ -1,41 +1,79 @@
-import base64
 import socket
 import ssl
 import time
 import urllib.request
+import base64
+import json
+from urllib.parse import urlparse, parse_qs
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 TIMEOUT = 3
 MAX_WORKERS = 80
 
-# 🔻 اینجا لینک ساب رو بذار
-SUB_URL = "https://raw.githubusercontent.com/punez/Repo-5/refs/heads/main/final.txt"
+SUB_URL = "PUT_YOUR_SUB_LINK_HERE"
 
 
 def download_sub():
-    with urllib.request.urlopen(SUB_URL, timeout=10) as response:
-        data = response.read()
-    return base64.b64decode(data).decode("utf-8", errors="ignore")
+    with urllib.request.urlopen(SUB_URL, timeout=15) as response:
+        data = response.read().decode("utf-8", errors="ignore")
+    return data
+
+
+def parse_vmess(line):
+    try:
+        raw = base64.b64decode(line[8:] + "==").decode()
+        j = json.loads(raw)
+        host = j["add"]
+        port = int(j["port"])
+        tls = j.get("tls") == "tls"
+        sni = j.get("sni") or host
+        return host, port, tls, sni
+    except:
+        return None
+
+
+def parse_vless_trojan(line):
+    try:
+        u = urlparse(line)
+        qs = parse_qs(u.query)
+
+        host = u.hostname
+        port = u.port
+
+        security = qs.get("security", ["none"])[0]
+        tls = security in ["tls", "reality"]
+
+        sni = qs.get("sni", [host])[0]
+
+        return host, port, tls, sni
+    except:
+        return None
+
+
+def parse_ss(line):
+    try:
+        if "@“ in line:
+            base = line[5:]
+        else:
+            base = line[5:]
+
+        decoded = base64.b64decode(base + "==").decode()
+        method_pass, server = decoded.split("@")
+        host, port = server.split(":")
+        return host, int(port), False, host
+    except:
+        return None
 
 
 def parse_line(line):
-    try:
-        if line.startswith("vmess://"):
-            raw = base64.b64decode(line[8:]).decode()
-            import json
-            j = json.loads(raw)
-            return j["add"], int(j["port"]), j.get("tls") == "tls", j.get("sni") or j["add"]
+    if line.startswith("vmess://"):
+        return parse_vmess(line)
 
-        if line.startswith("vless://") or line.startswith("trojan://"):
-            from urllib.parse import urlparse, parse_qs
-            u = urlparse(line)
-            qs = parse_qs(u.query)
-            tls = qs.get("security", [""])[0] in ["tls", "reality"]
-            sni = qs.get("sni", [u.hostname])[0]
-            return u.hostname, u.port, tls, sni
+    if line.startswith("vless://") or line.startswith("trojan://"):
+        return parse_vless_trojan(line)
 
-    except:
-        return None
+    if line.startswith("ss://"):
+        return parse_ss(line)
 
     return None
 
@@ -45,11 +83,13 @@ def tcp_check(host, port):
     try:
         s = socket.create_connection((host, port), timeout=TIMEOUT)
         latency = time.time() - start
+
         if latency > 3:
             s.close()
             return False
 
         time.sleep(1)
+
         try:
             s.send(b"\x00")
         except:
@@ -58,6 +98,7 @@ def tcp_check(host, port):
 
         s.close()
         return True
+
     except:
         return False
 
@@ -88,8 +129,8 @@ def test_node(node):
 
 
 def main():
-    decoded = download_sub()
-    lines = [l.strip() for l in decoded.splitlines() if l.strip()]
+    raw = download_sub()
+    lines = [l.strip() for l in raw.splitlines() if l.strip()]
 
     parsed = {}
     for line in lines:
@@ -109,16 +150,13 @@ def main():
             if future.result():
                 alive_keys.add(futures[future])
 
-    alive_lines = [
-        parsed[k][1] for k in alive_keys
-    ]
-
-    final_sub = base64.b64encode("\n".join(alive_lines).encode()).decode()
+    alive_lines = [parsed[k][1] for k in alive_keys]
 
     with open("alive_sub.txt", "w") as f:
-        f.write(final_sub)
+        f.write("\n".join(alive_lines))
 
-    print("Total:", len(lines))
+    print("Total lines:", len(lines))
+    print("Parsed nodes:", len(parsed))
     print("Alive:", len(alive_lines))
 
 
