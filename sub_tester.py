@@ -11,7 +11,7 @@ TIMEOUT = 3
 MAX_WORKERS = 80
 
 # 🔻 لینک ساب خام خودت رو اینجا بذار
-SUB_URL = "https://raw.githubusercontent.com/punez/Repo-5/refs/heads/main/final.txt"
+SUB_URL = "https://raw.githubusercontent.com/punez/Repo-5/refs/heads/main/alive.txt"
 
 
 # دانلود ساب
